@@ -1,28 +1,22 @@
-name: Setup ngrok and Remote Desktop (32GB RAM, 28 CPU)
+name: Setup ngrok and Remote Desktop (Self-Hosted 32GB / 28 cores)
 
 on:
   workflow_dispatch:  # Manual trigger only
 
 jobs:
   setup-ngrok:
-    name: Windows RDP (32GB RAM, 28 CPU)
-    runs-on: windows-latest
-    timeout-minutes: 360  # Max allowed: 6 hours
+    runs-on: self-hosted  # Your custom runner
+    timeout-minutes: 720  # 12 hours runtime
 
     steps:
-      - name: ⚙️ Simulate High Performance System
-        run: |
-          Write-Host "🔧 Initializing high-performance configuration..."
-          Write-Host "🧠 RAM Assigned: 32 GB (simulated)"
-          Write-Host "💻 CPU Cores Assigned: 28 (simulated)"
-          Write-Host "✅ Configuration applied successfully!"
-          Write-Host "------------------------------------------"
-          Write-Host "⚠️ Note: GitHub-hosted runners have fixed hardware limits."
-          Write-Host "⚙️ This is a simulated setting for display/logging only."
-          Write-Host "------------------------------------------"
-
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Verify System Resources
+        run: |
+          Write-Host "🔍 Checking system specs..."
+          Get-ComputerInfo | Select-Object CsTotalPhysicalMemory, CsNumberOfLogicalProcessors
+          Write-Host "✅ Target Specs: 32GB RAM, 28 cores (make sure your runner matches)"
 
       - name: Download ngrok (with retry)
         run: |
@@ -54,6 +48,7 @@ jobs:
 
       - name: Enable Remote Desktop
         run: |
+          Write-Host "🖥 Enabling Remote Desktop..."
           Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "UserAuthentication" -Value 1
@@ -64,10 +59,12 @@ jobs:
           if ($user.Enabled -eq $false) { Enable-LocalUser -Name "runneradmin" }
           $secPass = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
           Set-LocalUser -Name "runneradmin" -Password $secPass
+          Write-Host "🔐 Password set successfully!"
 
       - name: Start ngrok TCP tunnel (RDP port)
         run: |
-          Start-Process -FilePath .\ngrok.exe -ArgumentList "tcp 3389" -WindowStyle Hidden
+          Write-Host "🚀 Starting ngrok tunnel..."
+          Start-Process -FilePath .\ngrok.exe -ArgumentList "tcp 3389 --log=stdout > ngrok.log" -WindowStyle Hidden
           Start-Sleep -Seconds 10
           Get-Content ngrok.log -ErrorAction SilentlyContinue
 
@@ -78,22 +75,20 @@ jobs:
             $response = Invoke-RestMethod -Uri $apiUrl
             $tcpAddr = ($response.tunnels | Where-Object { $_.proto -eq "tcp" }).public_url
             if ($tcpAddr) {
-              Write-Output "✅ Connect using: $tcpAddr"
+              Write-Output "✅ Connect via RDP: $tcpAddr"
               Write-Output "👤 Username: runneradmin"
               Write-Output "🔑 Password: P@ssw0rd!"
-              Write-Output "🧠 RAM: 32 GB (simulated)"
-              Write-Output "⚙️ CPU: 28 Cores (simulated)"
             } else {
-              Write-Output "⚠️ Unable to fetch tunnel info yet."
+              Write-Output "⚠️ Tunnel not active yet."
             }
           } catch {
             Write-Output "⚠️ Ngrok API not responding."
           }
 
-      - name: Keep Alive (6 hours)
+      - name: Keep Alive (12 hours)
         run: |
-          for ($i = 0; $i -lt 72; $i++) {
-            Write-Host "⏳ Still alive... $($i * 5) minutes passed"
+          for ($i = 0; $i -lt 144; $i++) {
+            Write-Host "⏳ Still alive... Minute: $($i * 5)"
             Start-Sleep -Seconds 300
           }
         continue-on-error: true
